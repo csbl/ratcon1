@@ -2,6 +2,7 @@
 # Factors can be very annoying so I typically set stringsAsFactors to FALSE
 options(stringsAsFactors = FALSE)
 
+
 ef_import_model_sybil = function(x.version,x.name,x.type = "sybil",x.ext = ".rda",x.folder = "") {
   try({
     return(readRDS(paste0(x.folder,x.version,"_",x.name,"_","sybil.rda")))
@@ -9,6 +10,7 @@ ef_import_model_sybil = function(x.version,x.name,x.type = "sybil",x.ext = ".rda
   cat("failed to load sybil model: ",paste0(x.folder,x.version,"_",x.name,"_","sybil.rda"))
   return(NULL)
 }
+
 
 ef_import_model_info = function(x.version, x.name, x.folder, x.file.ext = ".tbl.rda") {
   x.types = c("rxn_info","met_info","gene_info")
@@ -23,17 +25,24 @@ ef_import_model_info = function(x.version, x.name, x.folder, x.file.ext = ".tbl.
       lapply(function(x) as.tbl(read.table(x, sep = "\t", quote = "", header = T, check.names = F, stringsAsFactors = F, fill = T)))
     return(x.info.list)
   }
-  
-  
-  
-  #print(x.files)
-  #list(name = x.name,version = x.version,organism = x.name) %>% 
-  #  c(x.info.list)
-  
 }
 
 
-
+flux_balance_analysis = function(model,x.digits = 8) {
+  x.msg = paste0(model@react_id[model@obj_coef != 0],collapse = " ")
+  if (nchar(x.msg) < 50) {
+    cat("sybil maximization of",x.msg,": ")
+  }
+  x.result = optimizeProb(model, algorithm = "fba", retOptSol = T)
+  
+  if (x.result@lp_stat != 5) {
+    cat(".....glpk error code", x.result@lp_stat,"\n")
+    return(NA)
+  }
+  x.value = x.result@lp_obj %>% round(x.digits)
+  cat(" ", x.value,'\n')
+  return(x.value)
+}
 
 
 # ef_df is a simple function used to clean up character and numeric columns in a data.frame
@@ -49,6 +58,7 @@ ef_df = function(x.tbl,x.filter = c(),
   }
   ef_df(x.tbl,x.filter,x.names[-1]) %>% as.tbl
 }
+
 
 # ef_df_clean is called from ef_df to trim excess white space from characters
 ef_df_cln = function(x) {
@@ -68,6 +78,13 @@ ef_df_slice = function(x.tbl,x.column = "contrast_id",
     x.tbl %>% filter(slice_id %in% x.id) %>% select(-slice_id)
   })
 }
+
+
+ef_read_table = function(x.filename, x.folder) {
+  read.table(paste0(x.folder, x.filename), header=T, sep = "\t", quote = "", 
+             check.names = F,  stringsAsFactors = F, fill = T) %>% as.tbl
+}
+
 
 ef_split_value = function(x.tbl,x.by = ";",x.melt = !all(c("variable","value") %in% names(x.tbl))) {
   x.split.count = sapply(x.tbl,function(x) sum(grepl(x.by,x))) %>% sort
@@ -94,6 +111,7 @@ ef_dataset_file_name = function(x.tbl,x.component = "",x.id = x.tbl$eset_id,
   gsub("\\_\\.",".",paste0(x.folder,x.id,"_",x.version,"_",x.type,"_",x.component,x.file.ext))
 }
 
+
 ef_dataset_file_check = function(x.check) {
   x.check$eset_file_fdata = ef_dataset_file_name(x.tbl = x.check,x.component = "fdata")
   x.check$eset_file_pdata = ef_dataset_file_name(x.tbl = x.check,x.component = "pdata")
@@ -108,6 +126,7 @@ ef_dataset_file_check = function(x.check) {
   x.check
 }
 
+
 ef_limma_file_check = function(x.check) {
   x.check$efit_file = ef_limma_file_name(x.tbl = x.check)
   x.check$efit_root = ef_limma_file_name(x.tbl = x.check,x.file.ext = "",x.folder = "")
@@ -121,6 +140,7 @@ ef_limma_file_name = function(x.tbl,x.lm = x.tbl$efit_lm, x.id = x.tbl$efit_id,
                                    x.folder = x.tbl$efit_folder, x.file.ext = x.tbl$efit_file_ext) {
   gsub("\\_\\.",".",paste0(x.folder,x.id,"_",x.version,"_",x.type,"_",x.lm,x.file.ext))
 }
+
 
 ef_dataset_preprocess = function(x.dataset,x.pdatabase,x.version = "gene", x.folder) {
   try({
@@ -153,6 +173,7 @@ ef_dataset_preprocess = function(x.dataset,x.pdatabase,x.version = "gene", x.fol
   data_frame(dataset_id = x.dataset,dataset_status = "FAIL")
 }
 
+
 ef_dataset_annotation = function(x.eset, x.annotation = NULL){
   
   if (is.null(x.annotation)) {
@@ -182,6 +203,7 @@ ef_dataset_annotation = function(x.eset, x.annotation = NULL){
   x.eset
 }
 
+
 ef_dataset_write = function(x.eset,x.dataset, x.version, x.type, x.folder) {
   
   x.exprs.file = gzfile(paste0(x.folder, x.dataset,"_",x.version,"_",x.type,"_exprs.txt.gz"))
@@ -200,6 +222,7 @@ ef_dataset_write = function(x.eset,x.dataset, x.version, x.type, x.folder) {
   data_frame(dataset_id = x.dataset, dataset_version = x.version, 
              dataset_type = x.type, dataset_folder = x.folder)
 }
+
 
 ef_dataset_load = function(x.tbl,x.eset.only = F) {
   
@@ -259,6 +282,7 @@ ef_dataset_load = function(x.tbl,x.eset.only = F) {
               info = x.tbl, status = "fail"))
 }
 
+
 ef_limma_load = function(x.load) {
   x.load %>% ef_limma_file_check %>% filter(efit_exists) %>% 
     with(setNames(efit_file,efit_root)) %>% lapply(function(x.file) {
@@ -278,6 +302,7 @@ ef_limma_load = function(x.load) {
     }) %>% bind_rows(.id = "efit_root")
 }
 
+
 ef_df_check_id = function(x.check,x.id.pattern = "_id$") {
   x.id.match = names(x.check)[grepl(x.id.pattern, names(x.check))]
   if (length(x.id.match) < 1) return(x.check)
@@ -286,8 +311,6 @@ ef_df_check_id = function(x.check,x.id.pattern = "_id$") {
   })
   return(x.check)
 }
-
-
 
 
 ef_limma_setup = function(x.contrasts, x.design, x.pdata, x.eset.folder, x.efit.folder,
@@ -354,6 +377,7 @@ ef_limma_preprocess = function(x.setup) {
 
 }
 
+
 ef_limma_efit = function(x.setup) {
   
   stopifnot(length(unique(x.setup$eset_id)) == 1)
@@ -391,17 +415,18 @@ ef_limma_efit = function(x.setup) {
 }
 
 
-ef_timbr_weights = function(gene.expression, gpr.setup,gene.ignore = c(), gene.keep.all = F) {
+ef_timbr_weights = function(gene.expression, gpr.setup, gene.ignore = c(), gene.keep.all) {
+  
+  stopifnot(length(unique(gene.expression$limma_id)) == 1)
   gpr.filter = gpr.setup %>% ef_df("value") %>% 
     filter(variable %in% gene.expression[["organism_id"]]) 
-  gpr.isozyme.value = ef_timbr_summarize_isozyme(gpr.filter, gene.expression,gene.ignore = gene.ignore, gene.keep.all = gene.keep.all,3)
-  gpr.complex.value = ef_timbr_summarize_complex(gpr.filter, gene.expression,gene.ignore = gene.ignore, gene.keep.all = gene.keep.all,3)
-  gpr.subunit.value = ef_timbr_summarize_subunit(gpr.filter, gene.expression,gene.ignore = gene.ignore, gene.keep.all = gene.keep.all,3)
+  gpr.isozyme.value = ef_timbr_summarize_isozyme(gpr.filter, gene.expression, gene.ignore, gene.keep.all, 3, -3)
+  gpr.complex.value = ef_timbr_summarize_complex(gpr.filter, gene.expression, gene.ignore, gene.keep.all, 3, -3)
+  gpr.subunit.value = ef_timbr_summarize_subunit(gpr.filter, gene.expression, gene.ignore, gene.keep.all, 3, -3)
   gpr.setup %>% select(rxn_id, organism_id = variable,timbr_weight_default) %>% distinct %>%
     inner_join(gene.expression %>% select(limma_id, organism_id, drug_id, time_id, dose_id) %>% distinct) %>% 
     left_join(bind_rows(list(gpr.isozyme.value,gpr.subunit.value,gpr.complex.value)) %>%
-                select(limma_id, organism_id, drug_id, time_id, dose_id, 
-                       rxn_id, gpr_significance, gpr_logfc)) %>%
+                select(organism_id, rxn_id, gpr_significance, gpr_logfc)) %>% #organism_id, drug_id, time_id, dose_id, 
     mutate(gpr_significance = ifelse(!is.na(gpr_significance),gpr_significance,0),
            gpr_logfc = ifelse(!is.na(gpr_logfc),gpr_logfc,0),
            relative_weight_ctl = (2 ^ gpr_logfc),
@@ -414,59 +439,65 @@ ef_timbr_weights = function(gene.expression, gpr.setup,gene.ignore = c(), gene.k
 
 ef_timbr_gpr_join = function(x.gpr, x.gene,x.keep = F) {
   if (x.keep) {
-    x.tbl = x.gpr  %>% 
-      left_join(x.gene %>% mutate(gene_id = as.character(gene_id)), 
-                by = c("organism_id","gene_id")) %>%
+    x.tbl = x.gpr %>% mutate(gene_id = as.character(gene_id)) %>% 
+      left_join(x.gene %>% select(gene_id, organism_id, logfc, fdr, pval, ave) %>%
+                  mutate(gene_id = as.character(gene_id)), by = c("organism_id","gene_id")) %>%
       mutate(fdr = ifelse(!is.na(fdr),fdr,1),
              logfc = ifelse(!is.na(logfc),logfc,0))
+    x.rule.count = length(unique(x.gpr$gene_id))
+    x.data.count = length(unique(x.gene$gene_id))
+    x.join.count = length(unique(x.tbl$gene_id))
+    cat(paste0(x.join.count, " / ", x.rule.count , " genes (ALL) used to calculate weights (", x.data.count, " with expression)\n"))
   } else {
-    x.tbl = x.gpr %>% 
-      inner_join(x.gene %>% mutate(gene_id = as.character(gene_id)), 
-                 by = c("organism_id","gene_id"))
+    x.tbl = x.gpr %>% mutate(gene_id = as.character(gene_id)) %>% 
+      inner_join(x.gene %>% select(gene_id, organism_id, logfc, fdr, pval, ave) %>%
+                   mutate(gene_id = as.character(gene_id)), by = c("organism_id","gene_id")) %>%
+      mutate(fdr = ifelse(!is.na(fdr),fdr,1),
+             logfc = ifelse(!is.na(logfc),logfc,0))
+    x.rule.count = length(unique(x.gpr$gene_id))
+    x.data.count = length(unique(x.gene$gene_id))
+    x.join.count = length(unique(x.tbl$gene_id))
+    cat(paste0(x.join.count, " / ", x.rule.count , " genes used to calculate weights (", x.data.count, " with expression)\n"))
   }
-  if (!is.null(x.tbl$logfc)) {
-    x.tbl %>% mutate(mag = sign(logfc) * -log10(fdr))
+  if (!is.null(x.tbl$logfc) && !is.null(x.tbl$fdr)) {
+    return(x.tbl %>% mutate(mag = sign(logfc) * -log10(fdr)))
   }
   x.tbl
 }
 
 
-ef_timbr_summarize_subunit = function(gpr.info, gene.value, gene.ignore, gene.keep.all = F, max.value = 3) {
+ef_timbr_summarize_subunit = function(gpr.info, gene.value, gene.ignore, gene.keep.all, max.value, min.value) {
   gpr.subunit.split = gpr.info %>% filter(grepl("\\(",value)) %>%
     mutate(gpr_rule = gsub("\\;","|",gsub("\\:","&",value))) %>%
     ef_split_value("\\:") %>% ef_df
   gpr.subunit.unique = gpr.subunit.split %>% select(variable,value) %>% distinct %>% 
-    mutate(subunit_id = paste0("subunit",1:n()), 
-           subunit_rule = gsub("[ \\(\\)]","",gsub("\\;"," | ",value)))
+    mutate(subunit_id = paste0("subunit",1:n()))
+    #       subunit_rule = gsub("[ \\(\\)]","",gsub("\\;"," | ",value)))
   gpr.subunit.breakdown = gpr.subunit.split %>% 
     left_join(gpr.subunit.unique, by = c("variable","value")) %>% 
     mutate(value = gsub("\\)$","",gsub("^\\(","",value))) %>% 
-    ef_split_value("\\;") %>% ef_df("value") %>% filter(value != "0") %>% 
+    ef_split_value("\\;") %>% ef_df("value") %>% filter(!grepl("^0$",value)) %>% 
     rename(organism_id = variable, gene_id = value) %>%
-    mutate(gene_ignore = gene_id %in% gene.ignore) %>%
-    group_by(rxn_id, organism_id) %>% 
-    mutate(n_gene = length(unique(gene_id)),
-           n_ignore = length(unique(gene_id[gene_ignore])),
-           n_subunit = length(unique(subunit_rule))) %>% ungroup
+    mutate(gene_ignore = gene_id %in% gene.ignore) #%>%
+    #group_by(rxn_id, organism_id) %>% 
+    #mutate(n_gene = length(unique(gene_id)),
+    #       n_ignore = length(unique(gene_id[gene_ignore])),
+    #       n_subunit = length(unique(subunit_rule))) %>% ungroup
   gpr.subunit.breakdown %>% ef_timbr_gpr_join(gene.value, gene.keep.all) %>% 
-    mutate(mag = -log10(fdr) * sign(logfc)) %>%
-    arrange(fdr, desc(abs(logfc))) %>% 
-    group_by(limma_id, organism_id, drug_id, time_id, dose_id, 
-             rxn_id, n_gene, n_ignore, n_subunit, subunit_id, subunit_rule) %>% 
-    summarize(gpr_significance = mean(mag[!gene_ignore], na.rm = T),
-              gpr_logfc = mean(logfc[!gene_ignore], na.rm = T)) %>% ungroup %>%
+    mutate(gene_significance = ifelse(!gene_ignore, ifelse(!is.na(mag),mag, 0), NA)) %>%
+    mutate(gene_logfc = ifelse(!gene_ignore, ifelse(!is.na(logfc),logfc, 0), NA)) %>%
+    group_by(organism_id, rxn_id, subunit_id) %>% #organism_id, drug_id, time_id, dose_id, n_gene, n_ignore, n_subunit, 
+    summarize(gpr_significance = mean(gene_significance, na.rm = T),
+              gpr_logfc = mean(gene_logfc, na.rm = T)) %>% ungroup %>%
     arrange(desc(abs(gpr_significance)),desc(abs(gpr_logfc))) %>% 
-    group_by(limma_id, organism_id, drug_id, time_id, dose_id, 
-             rxn_id, n_gene, n_ignore, n_subunit) %>% 
+    group_by(organism_id, rxn_id) %>% #organism_id, drug_id, time_id, dose_id, n_gene, n_ignore, n_subunit, 
     slice(1) %>% ungroup %>%
-    mutate(gpr_logfc = pmax(pmin(ifelse(!is.na(gpr_logfc),gpr_logfc, 0), 
-                                 max.value), -max.value)) %>%
-    mutate(gpr_significance = pmax(pmin(ifelse(!is.na(gpr_significance),gpr_significance, 0), 
-                                        max.value), -max.value))
+    mutate(gpr_logfc = pmax(pmin(ifelse(!is.na(gpr_logfc),gpr_logfc, 0), max.value), min.value)) %>%
+    mutate(gpr_significance = pmax(pmin(ifelse(!is.na(gpr_significance),gpr_significance, 0), max.value), min.value))
 }
 
-ef_timbr_summarize_complex = function(gpr.info, gene.value, gene.ignore,
-                                      gene.keep.all = F, max.value = 3) {
+
+ef_timbr_summarize_complex = function(gpr.info, gene.value, gene.ignore, gene.keep.all, max.value, min.value) {
   
   gpr.complex.split = gpr.info %>% 
     filter(grepl("\\:",value), !grepl("\\(",value)) %>% 
@@ -476,7 +507,7 @@ ef_timbr_summarize_complex = function(gpr.info, gene.value, gene.ignore,
     mutate(complex_id = paste0("complex",1:n()), complex_rule = gsub("\\:"," & ",value))
   gpr.complex.breakdown = gpr.complex.split %>% 
     left_join(gpr.complex.unique, by = c("variable","value")) %>% 
-    ef_split_value("\\:") %>% ef_df("value") %>% filter(value != "0") %>%
+    ef_split_value("\\:") %>% ef_df("value") %>% filter(!grepl("^0$",value)) %>% 
     rename(organism_id = variable, gene_id = value) %>% 
     mutate(gene_ignore = gene_id %in% gene.ignore) %>%
     group_by(rxn_id, organism_id) %>% 
@@ -485,49 +516,214 @@ ef_timbr_summarize_complex = function(gpr.info, gene.value, gene.ignore,
            n_complex = length(unique(complex_rule))) %>% ungroup %>%
     mutate(n_subunit = n_gene)
   gpr.complex.breakdown %>% ef_timbr_gpr_join(gene.value, gene.keep.all) %>% 
-    mutate(mag = -log10(fdr) * sign(logfc)) %>%
-    arrange(fdr, desc(abs(logfc))) %>% 
-    group_by(limma_id, organism_id, drug_id, time_id, dose_id, 
-             rxn_id, n_gene, n_ignore, n_subunit, n_complex, complex_id, complex_rule) %>% 
+    mutate(gene_significance = ifelse(!gene_ignore, ifelse(!is.na(mag),mag, 0), NA)) %>%
+    mutate(gene_logfc = ifelse(!gene_ignore, ifelse(!is.na(logfc),logfc, 0), NA)) %>%
+    arrange(desc(abs(gene_significance)), desc(abs(gene_logfc))) %>% 
+    group_by(organism_id, rxn_id, complex_id) %>%
     slice(1) %>% ungroup %>% 
-    group_by(limma_id, organism_id, drug_id, time_id, dose_id, 
-             rxn_id, n_gene, n_ignore, n_subunit, n_complex) %>% 
-    summarize(gpr_significance = mean(mag[!gene_ignore], na.rm = T),
-              gpr_logfc = mean(logfc[!gene_ignore], na.rm = T)) %>% ungroup %>%
-    mutate(gpr_logfc = pmax(pmin(ifelse(!is.na(gpr_logfc), gpr_logfc, 0), 
-                                 max.value), -max.value)) %>%
-    mutate(gpr_significance = pmax(pmin(ifelse(!is.na(gpr_significance),gpr_significance, 0), 
-                                        max.value), -max.value))
+    group_by(organism_id, rxn_id) %>%
+    summarize(gpr_significance = mean(gene_significance, na.rm = T),
+              gpr_logfc = mean(gene_logfc, na.rm = T)) %>% ungroup %>%
+    mutate(gpr_logfc = pmax(pmin(ifelse(!is.na(gpr_logfc), gpr_logfc, 0), max.value), min.value)) %>%
+    mutate(gpr_significance = pmax(pmin(ifelse(!is.na(gpr_significance), gpr_significance, 0), max.value), min.value))
 }
 
-ef_timbr_summarize_isozyme = function(gpr.info, gene.value, gene.ignore, gene.keep.all = F, max.value = 3) {
+
+ef_timbr_summarize_isozyme = function(gpr.info, gene.value, gene.ignore, gene.keep.all, max.value, min.value) {
   gpr.isozyme.split = gpr.info %>% 
     filter(!grepl("\\:",value), !grepl("\\(",value)) %>% 
     mutate(gpr_rule = gsub("\\;","|",gsub("\\:","&",value))) %>%
     ef_split_value(";") %>% ef_df
-  gpr.isozyme.breakdown = gpr.isozyme.split %>% ef_df("value") %>% filter(value != "0")  %>% 
+  gpr.isozyme.breakdown = gpr.isozyme.split %>% ef_df("value") %>% filter(!grepl("^0$",value)) %>% 
     rename(organism_id = variable, gene_id = value) %>%
     mutate(gene_ignore = gene_id %in% gene.ignore) %>%
     group_by(rxn_id,organism_id) %>% 
     mutate(n_gene = length(unique(gene_id)),
            n_ignore = length(unique(gene_id[gene_ignore])),
            n_subunit = 1) %>% ungroup
-  gpr.isozyme.breakdown %>% ef_timbr_gpr_join(gene.value, x.keep = gene.keep.all) %>% 
-    mutate(mag = -log10(fdr) * sign(logfc)) %>%
-    group_by(limma_id, organism_id, drug_id, time_id, dose_id, 
-             rxn_id, n_gene, n_ignore, n_subunit) %>% 
-    summarize(gpr_significance = mean(mag[!gene_ignore], na.rm = T),
-              gpr_logfc = mean(logfc[!gene_ignore], na.rm = T)) %>% ungroup %>%
-    mutate(gpr_logfc = pmax(pmin(ifelse(!is.na(gpr_logfc), gpr_logfc, 0), max.value), -max.value)) %>%
-    mutate(gpr_significance = pmax(pmin(ifelse(!is.na(gpr_significance), gpr_significance, 0), 
-                                        max.value), -max.value))
+  gpr.isozyme.breakdown %>% ef_timbr_gpr_join(gene.value, x.keep = gene.keep.all) %>%
+    mutate(gene_significance = ifelse(!gene_ignore, ifelse(!is.na(mag),mag, 0), NA)) %>%
+    mutate(gene_logfc = ifelse(!gene_ignore, ifelse(!is.na(logfc),logfc, 0), NA)) %>%
+    group_by(organism_id, rxn_id) %>%
+    summarize(gpr_significance = mean(gene_significance, na.rm = T),
+              gpr_logfc = mean(gene_logfc, na.rm = T)) %>% ungroup %>%
+    mutate(gpr_logfc = pmax(pmin(ifelse(!is.na(gpr_logfc), gpr_logfc, 0), max.value), min.value)) %>%
+    mutate(gpr_significance = pmax(pmin(ifelse(!is.na(gpr_significance), gpr_significance, 0), max.value), min.value))
 }
 
 
+ef_gpr_classification = function(gpr.rules) {
+  gpr.rules %>% 
+    mutate(rule_empty = is.na(value) | grepl("^0$", value) | grepl("^$", value)) %>%
+    mutate(rule_notempty = !rule_empty & grepl("[0-9]+", value)) %>%
+    mutate(rule_parentheses = grepl("\\(|\\)", value)) %>%
+    mutate(rule_multiprotein = grepl("\\:", value)) %>% 
+    mutate(rule_redundant = grepl("\\;", value)) %>%
+    mutate(rule_type = ifelse(rule_notempty, ifelse(
+      rule_parentheses, 
+      ifelse(rule_multiprotein & rule_redundant, "subunit", "invalid1"),
+      ifelse(rule_multiprotein, ifelse(rule_redundant, "invalid2", "complex"),
+             ifelse(rule_redundant, "isozyme", "unizyme"))), "empty"))
+}
 
 
+ef_efmin_gpr_join = function(x.gpr, x.gene,x.keep, x.default = 0) {
+  if (x.keep[1]) {
+    x.tbl = x.gpr %>% mutate(gene_id = as.character(gene_id)) %>% 
+      left_join(x.gene %>% select(organism_id, gene_id, logfc, fdr, pval, ave, ctl, trt) %>% 
+                  mutate(gene_id = as.character(gene_id)), by = c("organism_id","gene_id")) %>%
+      mutate(fdr = ifelse(!is.na(fdr),fdr,1),
+             logfc = ifelse(!is.na(logfc), logfc, 0),
+             ave = ifelse(!is.na(ave), ave, x.default),
+             ctl = ifelse(!is.na(ctl), ctl, x.default),
+             trt = ifelse(!is.na(trt), trt, x.default))
+    x.rule.count = length(unique(x.gpr$gene_id))
+    x.data.count = length(unique(x.gene$gene_id))
+    x.join.count = length(unique(x.tbl$gene_id))
+    cat(paste0(x.join.count, " / ", x.rule.count , " genes (ALL) used to calculate weights (", x.data.count, " with expression)\n"))
+  } else {
+    
+    x.tbl = x.gpr %>% mutate(gene_id = as.character(gene_id)) %>% 
+      inner_join(x.gene %>% select(organism_id, gene_id, logfc, fdr, pval, ave, ctl, trt) %>% 
+                   mutate(gene_id = as.character(gene_id)), by = c("organism_id","gene_id"))
+    x.rule.count = length(unique(x.gpr$gene_id))
+    x.data.count = length(unique(x.gene$gene_id))
+    x.join.count = length(unique(x.tbl$gene_id))
+    cat(paste0(x.join.count, " / ", x.rule.count , " genes used to calculate weights (", x.data.count, " with expression)\n"))
+  }
+  x.tbl
+}
 
 
+ef_efmin_weights = function(gene.expression, gpr.setup, gene.ignore = c(), gene.keep.all = F) {
+  stopifnot(length(unique(gene.expression$limma_id)) == 1)
+  gpr.type = gpr.setup %>% ef_gpr_classification %>%
+    filter(rule_notempty) %>%
+    filter(variable %in% gene.expression[["organism_id"]]) 
+  print(gpr.type %>% count(rule_type))
+  gpr.isozyme.value = gpr.type %>% filter(rule_type %in% c("isozyme", "unizyme")) %>% ef_efmin_summarize_isozyme(
+    gene.expression, gene.ignore = gene.ignore, gene.keep.all = gene.keep.all, max.value = 10, min.value = 0)
+  gpr.complex.value = gpr.type %>% filter(rule_type %in% c("complex")) %>% ef_efmin_summarize_complex(
+    gene.expression, gene.ignore = gene.ignore, gene.keep.all = gene.keep.all, max.value = 10, min.value = 0)
+  gpr.subunit.value = gpr.type %>% filter(rule_type %in% c("subunit")) %>% ef_efmin_summarize_subunit(
+    gene.expression, gene.ignore = gene.ignore, gene.keep.all = gene.keep.all, max.value = 10, min.value = 0)
+  # gpr.filter = gpr.setup %>% ef_df("value") %>% 
+  #  filter(variable %in% gene.expression[["organism_id"]]) 
+  # gpr.isozyme.value = ef_efmin_summarize_isozyme(gpr.filter, gene.expression,gene.ignore = gene.ignore, gene.keep.all = gene.keep.all,3)
+  # gpr.complex.value = ef_efmin_summarize_complex(gpr.filter, gene.expression,gene.ignore = gene.ignore, gene.keep.all = gene.keep.all,3)
+  # gpr.subunit.value = ef_efmin_summarize_subunit(gpr.filter, gene.expression,gene.ignore = gene.ignore, gene.keep.all = gene.keep.all,3)
+  gpr.setup %>% 
+    ef_gpr_classification %>%
+    select(rxn_id, rule_type, organism_id = variable, efmin_weight_default = timbr_weight_default) %>% distinct %>%
+    inner_join(gene.expression %>% select(limma_id, organism_id, drug_id, time_id, dose_id) %>% distinct) %>% 
+    left_join(bind_rows(list(
+      gpr.isozyme.value %>% mutate(gpr_type = "isozyme"),
+      gpr.subunit.value %>% mutate(gpr_type = "subunit"),
+      gpr.complex.value %>% mutate(gpr_type = "complex"))) %>%
+        select(organism_id, rxn_id, gpr_type, gpr_ave, gpr_ctl, gpr_trt)) %>%
+    mutate(gpr_ave = ifelse(!is.na(gpr_ave), gpr_ave, 0),
+           gpr_ctl = ifelse(!is.na(gpr_ctl), gpr_ctl, 0),
+           gpr_trt = ifelse(!is.na(gpr_trt), gpr_trt, 0),
+           efmin_weight_ctl = signif(2 ^ -gpr_ctl, 3),
+           efmin_weight_ave = signif(2 ^ -gpr_ave, 3),
+           efmin_weight_trt = signif(2 ^ -gpr_trt, 3))
+}
+
+
+ef_efmin_summarize_isozyme = function(gpr.info, gene.value, gene.ignore, gene.keep.all, max.value = 10, min.value = 0) {
+  gpr.isozyme.split = gpr.info %>% 
+    filter(!grepl("\\:",value), !grepl("\\(",value)) %>% 
+    #mutate(gpr_rule = gsub("\\;","|",gsub("\\:","&",value))) %>%
+    select(rxn_id, variable, value) %>% 
+    ef_split_value(";") %>% ef_df
+  gpr.isozyme.breakdown = gpr.isozyme.split %>% ef_df("value") %>% filter(!(value %in% c("0"))) %>%
+    rename(organism_id = variable, gene_id = value) %>%
+    mutate(gene_ignore = gene_id %in% gene.ignore)
+  gpr.isozyme.breakdown %>% ef_efmin_gpr_join(x.gene = gene.value, x.keep = gene.keep.all, x.default = min.value) %>% 
+    mutate(gene_ave = ifelse(!gene_ignore, ifelse(!is.na(ave), ave, min.value), NA)) %>% 
+    mutate(gene_ctl = ifelse(!gene_ignore, ifelse(!is.na(ctl), ctl, min.value), NA)) %>% 
+    mutate(gene_trt = ifelse(!gene_ignore, ifelse(!is.na(trt), trt, min.value), NA)) %>% 
+    group_by(organism_id, rxn_id) %>% 
+    summarize(gpr_significance = 1,
+              gpr_ave = max(gene_ave, na.rm = T),
+              gpr_ctl = max(gene_ctl, na.rm = T),
+              gpr_trt = max(gene_trt, na.rm = T)) %>% ungroup %>%
+    mutate(gpr_ave = pmin(pmax(ifelse(!is.na(gpr_ave), gpr_ave, min.value), min.value), max.value)) %>% 
+    mutate(gpr_ctl = pmin(pmax(ifelse(!is.na(gpr_ctl), gpr_ctl, min.value), min.value), max.value)) %>% 
+    mutate(gpr_trt = pmin(pmax(ifelse(!is.na(gpr_trt), gpr_trt, min.value), min.value), max.value))
+}
+
+
+ef_efmin_summarize_subunit = function(gpr.info, gene.value, gene.ignore, gene.keep.all, max.value = 10, min.value = 0) {
+  gpr.subunit.split = gpr.info %>% filter(grepl("\\(",value)) %>%
+    # mutate(gpr_rule = gsub("\\;","|",gsub("\\:","&",value))) %>%
+    select(rxn_id, variable, value) %>% 
+    ef_split_value("\\:") %>% ef_df
+  gpr.subunit.unique = gpr.subunit.split %>% select(variable,value) %>% distinct %>% 
+    mutate(subunit_id = paste0("subunit",1:n()))
+  gpr.subunit.breakdown = gpr.subunit.split %>% 
+    left_join(gpr.subunit.unique, by = c("variable","value")) %>% 
+    mutate(value = gsub("\\)$","",gsub("^\\(","",value))) %>% 
+    ef_split_value("\\;") %>% ef_df("value") %>% filter(!(value %in% c("0"))) %>%
+    rename(organism_id = variable, gene_id = value) %>%
+    mutate(gene_ignore = gene_id %in% gene.ignore)
+  gpr.subunit.breakdown %>% ef_efmin_gpr_join(x.gene = gene.value, x.keep = gene.keep.all, x.default = min.value) %>% 
+    mutate(gene_ave = ifelse(!gene_ignore, ifelse(!is.na(ave), ave, min.value), NA)) %>% 
+    mutate(gene_ctl = ifelse(!gene_ignore, ifelse(!is.na(ctl), ctl, min.value), NA)) %>% 
+    mutate(gene_trt = ifelse(!gene_ignore, ifelse(!is.na(trt), trt, min.value), NA)) %>% 
+    group_by(organism_id, rxn_id, subunit_id) %>% 
+    summarize(subunit_significance = 1,
+              subunit_ave = max(gene_ave, na.rm = T),
+              subunit_ctl = max(gene_ctl, na.rm = T),
+              subunit_trt = max(gene_trt, na.rm = T)) %>% ungroup %>%
+    mutate(subunit_ave = pmin(pmax(ifelse(!is.na(subunit_ave), subunit_ave, min.value), min.value), max.value)) %>% 
+    mutate(subunit_ctl = pmin(pmax(ifelse(!is.na(subunit_ctl), subunit_ctl, min.value), min.value), max.value)) %>% 
+    mutate(subunit_trt = pmin(pmax(ifelse(!is.na(subunit_trt), subunit_trt, min.value), min.value), max.value)) %>% 
+    group_by(organism_id, rxn_id) %>% 
+    summarize(gpr_significance = 1,
+              gpr_ave = min(subunit_ave, na.rm = T),
+              gpr_ctl = min(subunit_ctl, na.rm = T),
+              gpr_trt = min(subunit_trt, na.rm = T)) %>% ungroup %>%
+    mutate(gpr_ave = pmin(pmax(ifelse(!is.na(gpr_ave), gpr_ave, min.value), min.value), max.value)) %>% 
+    mutate(gpr_ctl = pmin(pmax(ifelse(!is.na(gpr_ctl), gpr_ctl, min.value), min.value), max.value)) %>% 
+    mutate(gpr_trt = pmin(pmax(ifelse(!is.na(gpr_trt), gpr_trt, min.value), min.value), max.value))
+}
+
+
+ef_efmin_summarize_complex = function(gpr.info, gene.value, gene.ignore, gene.keep.all, max.value = 10, min.value = 0) {
+  
+  gpr.complex.split = gpr.info %>% 
+    filter(grepl("\\:",value), !grepl("\\(",value)) %>% 
+    #mutate(gpr_rule = gsub("\\;","|",gsub("\\:","&",value))) %>%
+    ef_split_value(";") %>% ef_df
+  gpr.complex.unique = gpr.complex.split %>% select(variable,value) %>% distinct %>% 
+    mutate(complex_id = paste0("complex",1:n()))#, complex_rule = gsub("\\:"," & ",value))
+  gpr.complex.breakdown = gpr.complex.split %>% 
+    left_join(gpr.complex.unique, by = c("variable","value")) %>% 
+    ef_split_value("\\:") %>% ef_df("value") %>% filter(!(value %in% c("0"))) %>%
+    rename(organism_id = variable, gene_id = value) %>% 
+    mutate(gene_ignore = gene_id %in% gene.ignore)
+  gpr.complex.breakdown %>% ef_efmin_gpr_join(x.gene = gene.value, x.keep = gene.keep.all, x.default = min.value) %>% 
+    mutate(gene_ave = ifelse(!gene_ignore, ifelse(!is.na(ave), ave, min.value), NA)) %>% 
+    mutate(gene_ctl = ifelse(!gene_ignore, ifelse(!is.na(ctl), ctl, min.value), NA)) %>% 
+    mutate(gene_trt = ifelse(!gene_ignore, ifelse(!is.na(trt), trt, min.value), NA)) %>% 
+    group_by(organism_id, rxn_id, complex_id) %>% 
+    summarize(complex_significance = 1,
+              complex_ave = min(gene_ave, na.rm = T),
+              complex_ctl = min(gene_ctl, na.rm = T),
+              complex_trt = min(gene_trt, na.rm = T)) %>% ungroup %>%
+    mutate(complex_ave = pmin(pmax(ifelse(!is.na(complex_ave), complex_ave, min.value), min.value), max.value)) %>% 
+    mutate(complex_ctl = pmin(pmax(ifelse(!is.na(complex_ctl), complex_ctl, min.value), min.value), max.value)) %>% 
+    mutate(complex_trt = pmin(pmax(ifelse(!is.na(complex_trt), complex_trt, min.value), min.value), max.value)) %>% 
+    group_by(organism_id, rxn_id) %>% 
+    summarize(gpr_significance = 1,
+              gpr_ave = max(complex_ave, na.rm = T),
+              gpr_ctl = max(complex_ctl, na.rm = T),
+              gpr_trt = max(complex_trt, na.rm = T)) %>% ungroup %>%
+    mutate(gpr_ave = pmin(pmax(ifelse(!is.na(gpr_ave), gpr_ave, min.value), min.value), max.value)) %>% 
+    mutate(gpr_ctl = pmin(pmax(ifelse(!is.na(gpr_ctl), gpr_ctl, min.value), min.value), max.value)) %>% 
+    mutate(gpr_trt = pmin(pmax(ifelse(!is.na(gpr_trt), gpr_trt, min.value), min.value), max.value))
+}
 
 
 ef_reproduce_figure2 = function(gpr.info,gpr.limit = 9,gpr.legend = F) {
@@ -555,6 +751,8 @@ ef_reproduce_figure2 = function(gpr.info,gpr.limit = 9,gpr.legend = F) {
           panel.grid.major = element_line(size = NA),
           panel.grid.minor = element_line(size = NA))
 }
+
+
 ef_reproduce_figure3 = function(gpr.info,gpr.limit = 9) {
   gpr.color = c(`non-enzymatic` = "#7F7F7F", shared = "#674EA7", 
                 `rat-specific` = "#C0504D", `human-specific` = "#4F81BD")
@@ -582,7 +780,6 @@ ef_reproduce_figure3 = function(gpr.info,gpr.limit = 9) {
 }
 
 
-
 ef_biomarker_gene_deletion = function(x.tbl,x.sybil) {
   x.genes = x.tbl %>% select(gene_id) %>% 
     mutate(gene_id = as.character(gene_id)) %>% distinct %>% 
@@ -606,4 +803,86 @@ ef_biomarker_gene_deletion = function(x.tbl,x.sybil) {
 }
 
 
+ef_factor_sort = function(x.break, x.label) {
+  x.tbl = data_frame(id = x.break, name = x.label) %>% 
+    distinct %>% arrange(id,name) %>%
+    group_by(name) %>% slice(1) %>% ungroup %>% arrange(id, name)
+  factor(x.label, levels = x.tbl$name, ordered = T)
+}
 
+
+ggcolor = c("non-enzymatic" = "#7F7F7F", "shared" = "#674EA7", 
+            "none" = "#7F7F7F", "Unchanged" = "#7F7F7F", #"none" = "#A6A6A6"
+            "both" = "#674EA7",
+            "rat-specific" = "#C0504D", "rat" = "#C0504D", "rno" = "#C0504D", 
+            "human-specific" = "#4F81BD", "human" = "#4F81BD", "hsa" = "#4F81BD", 
+            "mmu" = "#B18E5F", 
+            "similar" = "#674EA7", "up" = "#674EA7", "Elevated" = "#674EA7", "elevated" = "#674EA7", 
+            "dn" = "#F79646", "opposite" = "#F79646", "Reduced" = "#F79646", "reduced" = "#F79646", 
+            "ctl" = "pink", "trt" = "green")
+
+ef_timbr_heatmap = function(x.drugs, x.mets, x.compare = timbr.compare, 
+                            x.drug.summary = timbr.drug.summary, x.rxn.summary = timbr.rxn.summary,
+                            base.size = 24) {
+  x.triangle.size = 0.45
+  x.heatmap.data = x.compare %>% 
+    inner_join(x.drug.summary %>% filter(drug_id %in% x.drugs) %>% 
+                 select(drug_id, drug_cor, drug_fdr, drug_pval, drug_index) %>% 
+                 arrange(desc(drug_cor), drug_fdr, drug_pval) %>% 
+                 mutate(drug_hindex = 1:n())) %>% 
+    inner_join(x.rxn.summary %>% filter(met %in% x.mets) %>% 
+                 mutate(biomarker = gsub("L-lactate", "lactate", met, fixed = T)) %>% 
+                 select(biomarker, rxn_id, rxn_cor, rxn_fdr, rxn_pval, rxn_ave_rno, rxn_ave_hsa, rxn_index) %>% 
+                 arrange(desc(rxn_cor), rxn_fdr, rxn_pval) %>%
+                 arrange(rxn_ave_rno + rxn_ave_hsa, rxn_fdr, rxn_pval) %>%
+                 # arrange(desc(biomarker))%>% 
+                 mutate(rxn_hindex = 1:n()))  %>%
+    as.tbl %>% ef_df %>% 
+    mutate(compound = drug_name) %>% 
+    mutate(biomarker = gsub("L-lactate", "lactate", met, fixed = T)) %>% 
+    mutate(biomarker = gsub("(R)-3-hydroxybutanoate", "BHB", biomarker, fixed = T)) %>% 
+    mutate(biomarker = gsub("prostaglandin E2", "PGE2", biomarker, fixed = T)) %>%
+    mutate(biomarker = gsub("chenodeoxycholic acid", "CDCA", biomarker, fixed = T)) %>%
+    mutate(biomarker = gsub("ic acid", "ate", biomarker, fixed = T)) %>% 
+    mutate(drug_color = ifelse(drug_fdr < 0.1, ifelse(drug_cor > 0, ggcolor["similar"], ggcolor["opposite"]), "#BBBBBB")) %>% 
+    mutate(rxn_color = ifelse(rxn_fdr < 0.1, ifelse(rxn_cor > 0, ggcolor["similar"], ggcolor["opposite"]), "#BBBBBB"))
+  
+  x.heatmap.triangles = x.heatmap.data %>% 
+    mutate(poly_hsa = "hsa", poly_rno = "rno") %>%
+    arrange(drug_hindex, rxn_hindex) %>%
+    left_join(data_frame(x_hsa = c(-1, 1, 1), y_hsa = -c( 1, 1,-1)) %>%
+                mutate(poly_hsa = "hsa")) %>%
+    left_join(data_frame(x_rno = c(-1,-1, 1), y_rno = -c(-1, 1,-1)) %>%
+                mutate(poly_rno = "rno")) %>%
+    mutate(x1 = as.numeric(factor(drug_hindex)) + x_hsa * x.triangle.size, 
+           y1 = as.numeric(factor(rxn_hindex)) + y_hsa * x.triangle.size,
+           x2 = as.numeric(factor(drug_hindex)) + x_rno * x.triangle.size, 
+           y2 = as.numeric(factor(rxn_hindex)) + y_rno * x.triangle.size)
+  
+  x.heatmap.drugs = x.heatmap.data %>% 
+    select(compound, drug_id, drug_hindex, drug_color) %>% distinct %>% 
+    arrange(drug_hindex) %>% mutate(xx = ef_factor_sort(drug_hindex, compound))
+  x.heatmap.rxns = x.heatmap.data %>% 
+    select(rxn_id, biomarker, rxn_hindex, rxn_color) %>% distinct %>% 
+    arrange(rxn_hindex) %>% mutate(yy = ef_factor_sort(rxn_hindex, biomarker))
+  
+  heat.max = 1.5
+  x.heatmap.plot = x.heatmap.triangles %>% 
+    mutate(hsa_fill = pmin(pmax(hsa, -heat.max), heat.max)) %>% 
+    mutate(rno_fill = pmin(pmax(rno, -heat.max), heat.max)) %>%
+    mutate(xx = ef_factor_sort(drug_hindex, compound)) %>%
+    mutate(yy = ef_factor_sort(rxn_hindex, biomarker)) %>%
+    ggplot(aes(x = xx, y = yy)) +
+    geom_point(alpha = 0) + 
+    scale_x_discrete(labels = x.heatmap.drugs$xx, breaks = x.heatmap.drugs$xx) + 
+    scale_y_discrete(labels = x.heatmap.rxns$yy, breaks = x.heatmap.rxns$yy) + 
+    geom_polygon(aes(x = x1, y = y1, group = interaction(drug_id, rxn_id), fill = hsa_fill), alpha = 1) + 
+    geom_polygon(aes(x = x2, y = y2, group = interaction(drug_id, rxn_id), fill = rno_fill), alpha = 1) + 
+    scale_fill_gradient2(low = ggcolor["opposite"], mid = "#FFFFFF", 
+                         high = ggcolor["similar"], limits = c(-heat.max, heat.max)) + 
+    theme_minimal(base_size = base.size) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),#color = x.heatmap.drugs$drug_color, 
+          axis.text.y = element_text(angle = 0, hjust = 1),#axis.text.y = element_text(color = x.heatmap.rxns$rxn_color),
+          legend.position = "none")  + xlab("") + ylab("")
+  x.heatmap.plot
+}
