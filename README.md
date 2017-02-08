@@ -1,6 +1,8 @@
 # Ratcon1 database
 Code availability for the manuscript titled "Reconciled rat and human metabolic networks for comparative toxicogenomics analyses and biomarker predictions" by Blais *et al*.
 
+The article is now published and available at http://www.nature.com/articles/ncomms14250
+
 ## Simulating metabolic tasks with *iRno* and *iHsa*
 
 ### blais_check_tasks.m
